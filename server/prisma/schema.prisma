@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model JobDescription {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+  candidates  Candidate[]
+}
+
+model Candidate {
+  id               String   @id @default(uuid())
+  name             String
+  email            String?
+  resumeText       String
+  structuredData   Json?    // Parsed by LLM
+  similarityScore  Float?   // Vector DB score vs JD
+  status           String   @default("Pending") // Pending, Shortlisted, Interviewed, Rejected
+  
+  jobId            String
+  job              JobDescription @relation(fields: [jobId], references: [id])
+  
+  interviews       Interview[]
+  createdAt        DateTime @default(now())
+}
+
+model Interview {
+  id             String   @id @default(uuid())
+  candidateId    String
+  candidate      Candidate @relation(fields: [candidateId], references: [id])
+  
+  interviewLink  String   @unique
+  rubric         Json?    // LLM generated custom questions
+  transcript     String?  // Final combined transcript
+  
+  technicalScore Float?
+  communicationScore Float?
+  finalReport    Json?    // LLM evaluation report
+  
+  status         String   @default("Scheduled") // Scheduled, InProgress, Completed
+  scheduledAt    DateTime
+  createdAt      DateTime @default(now())
+}
