@@ -5,6 +5,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import uploadRoutes from './routes/upload';
 import interviewRoutes from './routes/interview';
+import { getAgentResponse } from './services/agentService';
 
 dotenv.config();
 
@@ -34,12 +35,20 @@ io.on('connection', (socket) => {
   });
 
   // Handle incoming audio transcript from STT
-  socket.on('candidate_audio_transcript', (data) => {
-    console.log(`Transcript from ${socket.id}:`, data);
-    // TODO: Send to LLM Agent and stream response back
-    
-    // Echo back for now
-    socket.emit('agent_response_text', { text: `Agent heard: ${data.text}` });
+  socket.on('candidate_audio_transcript', async (data) => {
+    try {
+      console.log(`Transcript from ${socket.id}:`, data);
+      const transcript = data.text || '';
+
+      // Optionally: run retrieval to get context and pass to agent
+      // For now call agentService directly
+      const result = await getAgentResponse(transcript, null);
+
+      socket.emit('agent_response_text', { text: result.text });
+    } catch (err) {
+      console.error('Error handling transcript -> agent:', err);
+      socket.emit('agent_response_text', { text: 'Agent error: unable to respond.'});
+    }
   });
 });
 
