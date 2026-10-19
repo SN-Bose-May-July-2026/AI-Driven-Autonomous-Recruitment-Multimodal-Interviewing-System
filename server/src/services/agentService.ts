@@ -1,49 +1,42 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { PromptTemplate } from "@langchain/core/prompts";
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { PromptTemplate } from '@langchain/core/prompts';
 
-export const generateInterviewRubric = async (candidateData: any, jobDescription: string) => {
+export async function getAgentResponse(transcript: string, context: string | null = null) {
   if (!process.env.GOOGLE_API_KEY) {
-    console.warn("GOOGLE_API_KEY is not set. Returning mock rubric.");
-    return [
-      { question: "Can you explain your experience with React?", criteria: "Understanding of hooks and component lifecycle." },
-      { question: "Tell me about a challenging project.", criteria: "Problem-solving skills and resilience." }
-    ];
+    return {
+      text: `Agent (mock) received: ${transcript.slice(0, 200)}${transcript.length > 200 ? '...' : ''}`
+    };
   }
 
   const llm = new ChatGoogleGenerativeAI({
-    modelName: "gemini-1.5-pro", // Use a reasoning model for this
-    maxOutputTokens: 2048,
+    modelName: process.env.GENERATIVE_MODEL || 'gemini-1.5-flash',
+    maxOutputTokens: 512,
   });
 
-  const prompt = PromptTemplate.fromTemplate(`
-    You are an expert AI Technical Interviewer.
-    Your task is to generate a custom interview rubric for a candidate based on their profile and the Job Description.
-    Identify gaps between the candidate's experience and the JD, and generate specific questions to test those gaps.
-    Generate 5 targeted questions.
-    
-    Return ONLY a valid JSON array of objects with the structure:
-    [{{ "question": "The question text", "criteria": "What to look for in a good answer" }}]
-    
-    Job Description:
-    {jd}
-    
-    Candidate Data:
-    {candidate}
-  `);
+  const template = `
+You are an interviewer assistant. Use the following context to respond helpfully and concisely.
+
+Context:
+{context}
+
+Candidate transcript:
+{transcript}
+
+Respond as the interviewer/agent. Keep responses short and actionable.
+`;
+
+  const prompt = PromptTemplate.fromTemplate(template);
 
   try {
     const chain = prompt.pipe(llm);
-    const response = await chain.invoke({ 
-      jd: jobDescription, 
-      candidate: JSON.stringify(candidateData) 
+    const resp = await chain.invoke({
+      context: context ?? 'No additional context provided.',
+      transcript,
     });
-    
-    let content = response.content as string;
-    content = content.replace(/^```json/m, '').replace(/^```/m, '').trim();
-    
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("AI Rubric Generation failed:", error);
-    throw new Error("Failed to generate rubric.");
+    const content = (resp.content ?? '') as string;
+    return { text: content.trim() };
+  } catch (err) {
+    console.error('Agent LLM call failed:', err);
+    return { text: 'Agent error: unable to generate response at the moment.' };
   }
-};
+}
